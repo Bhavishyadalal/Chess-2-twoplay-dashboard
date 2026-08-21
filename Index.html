@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Twoplay · Game Loader Console</title>
+<style>
+  :root{
+    --bg:#0c0d10;
+    --panel:#15171c;
+    --panel-2:#1b1e25;
+    --line:#262a33;
+    --text:#e7e9ee;
+    --muted:#8a90a0;
+    --accent:#5be3a5;
+    --accent-dim:#2f5a48;
+    --warn:#e3b95b;
+    --err:#ff6b6b;
+    --mono: "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family: var(--mono);
+    font-size:13px; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px; margin:0 auto; padding:28px 20px 80px;}
+  header{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:24px; border-bottom:1px solid var(--line); padding-bottom:16px;}
+  header h1{font-size:15px; font-weight:600; margin:0; letter-spacing:.02em;}
+  header h1 .dim{color:var(--muted); font-weight:400;}
+  header .repo{color:var(--muted); font-size:12px;}
+  header .repo b{color:var(--text); font-weight:500;}
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:18px;}
+  .card h2{font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 14px; font-weight:600;}
+
+  label{display:block; font-size:11px; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:.04em;}
+  input[type=text], input[type=password], textarea{
+    width:100%; background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    padding:9px 10px; border-radius:6px; font-family:var(--mono); font-size:13px;
+    outline:none;
+  }
+  input[type=text]:focus, input[type=password]:focus, textarea:focus{border-color:var(--accent-dim);}
+  textarea{min-height:140px; resize:vertical; white-space:pre; }
+  .row{display:flex; gap:12px; margin-bottom:12px;}
+  .row > div{flex:1;}
+  .field{margin-bottom:12px;}
+  .hint{color:var(--muted); font-size:11px; margin-top:5px;}
+
+  .filebtn{
+    display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+    background:var(--panel-2); border:1px dashed var(--line); border-radius:6px;
+    padding:9px 12px; color:var(--muted); font-size:12px;
+  }
+  .filebtn:hover{border-color:var(--accent-dim); color:var(--text);}
+  .filebtn input{display:none;}
+  .filename{color:var(--accent); margin-left:6px;}
+
+  button.primary{
+    background:var(--accent); color:#08110d; border:none; border-radius:6px;
+    padding:10px 16px; font-family:var(--mono); font-weight:700; font-size:12px;
+    letter-spacing:.03em; cursor:pointer; text-transform:uppercase;
+  }
+  button.primary:disabled{opacity:.4; cursor:not-allowed;}
+  button.primary:hover:not(:disabled){filter:brightness(1.08);}
+
+  button.ghost{
+    background:transparent; color:var(--muted); border:1px solid var(--line); border-radius:6px;
+    padding:6px 10px; font-family:var(--mono); font-size:11px; cursor:pointer;
+  }
+  button.ghost:hover{color:var(--err); border-color:var(--err);}
+
+  .log{
+    margin-top:14px; border-top:1px solid var(--line); padding-top:12px;
+    display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto;
+  }
+  .log .entry{font-size:12px; padding:6px 8px; border-radius:5px; background:var(--panel-2);}
+  .log .entry.ok{color:var(--accent); border-left:2px solid var(--accent);}
+  .log .entry.err{color:var(--err); border-left:2px solid var(--err);}
+  .log .entry.info{color:var(--muted); border-left:2px solid var(--line);}
+
+  table{width:100%; border-collapse:collapse; font-size:12px;}
+  th{text-align:left; color:var(--muted); font-weight:500; text-transform:uppercase; font-size:10px; letter-spacing:.05em; padding:6px 8px; border-bottom:1px solid var(--line);}
+  td{padding:8px; border-bottom:1px solid var(--line); vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  .icon-cell{font-size:16px; width:30px;}
+  .id-cell{color:var(--accent);}
+  .empty{color:var(--muted); text-align:center; padding:24px 0; font-size:12px;}
+
+  .status-dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px;}
+  .status-dot.on{background:var(--accent);}
+  .status-dot.off{background:var(--err);}
+  .authbar{display:flex; align-items:center; gap:10px; font-size:11px; color:var(--muted);}
+
+  .warn-box{background:rgba(227,185,91,0.08); border:1px solid var(--warn); color:var(--warn); border-radius:6px; padding:10px 12px; font-size:11px; margin-bottom:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Twoplay <span class="dim">/ Game Loader Console</span></h1>
+    <div class="repo">repo: <b id="repoLabel">Bhavishyadalal/chess-2</b> <span id="branchLabel">@main</span></div>
+  </header>
+
+  <div class="card">
+    <h2>Auth</h2>
+    <div class="warn-box">
+      Token lives in memory for this tab only — never written to localStorage, never committed. Closing or reloading this page clears it.
+      Needs a classic PAT with <b>repo</b> scope, or a fine-grained token with <b>Contents: Read and write</b> on this one repo.
+    </div>
+    <div class="row">
+      <div>
+        <label for="pat">GitHub Personal Access Token</label>
+        <input type="password" id="pat" placeholder="ghp_… or github_pat_…" autocomplete="off" />
+      </div>
+    </div>
+    <div class="authbar">
+      <span><span id="authDot" class="status-dot off"></span><span id="authText">not verified</span></span>
+      <button class="ghost" id="verifyBtn" type="button">verify token</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Add Game</h2>
+    <div class="row">
+      <div class="field">
+        <label for="gid">Game ID (slug)</label>
+        <input type="text" id="gid" placeholder="dots-and-boxes" />
+        <div class="hint">lowercase, hyphens only. becomes games/&lt;id&gt;.js</div>
+      </div>
+      <div class="field">
+        <label for="gname">Display Name</label>
+        <input type="text" id="gname" placeholder="Dots and Boxes" />
+      </div>
+      <div class="field" style="max-width:110px;">
+        <label for="gicon">Icon</label>
+        <input type="text" id="gicon" placeholder="🔲" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Module File (.js)</label>
+      <label class="filebtn">
+        <input type="file" id="gfile" accept=".js,text/javascript" />
+        📄 choose file <span class="filename" id="filenameLabel"></span>
+      </label>
+      <div class="hint">the AI-generated module from Prompt 2. Pasting text also works below.</div>
+    </div>
+
+    <div class="field">
+      <label for="gcode">…or paste module source</label>
+      <textarea id="gcode" placeholder="// GameModules.<id> = { mount(container) {...} }&#10;// GameControllers.<id> = { init, render, onData, statusText, canTakeback }"></textarea>
+    </div>
+
+    <button class="primary" id="submitBtn" type="button">Commit + Register</button>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <div class="card">
+    <h2>Registered Games</h2>
+    <div id="tableWrap"><div class="empty">load token, then refresh to see current manifest</div></div>
+    <div style="margin-top:12px;">
+      <button class="ghost" id="refreshBtn" type="button" style="color:var(--text); border-color:var(--line);">↻ refresh manifest</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  const OWNER = 'Bhavishyadalal';
+  const REPO = 'chess-2';
+  const BRANCH = 'main';
+  const BUILTIN_IDS = ['chess','ttt','c4','checkers','reversi'];
+  const API = 'https://api.github.com';
+
+  let token = '';
+
+  const $ = id => document.getElementById(id);
+  const patEl = $('pat'), authDot = $('authDot'), authText = $('authText');
+  const logEl = $('log');
+  const tableWrap = $('tableWrap');
+
+  function log(msg, kind){
+    const e = document.createElement('div');
+    e.className = 'entry ' + (kind || 'info');
+    e.textContent = msg;
+    logEl.prepend(e);
+  }
+
+  function ghHeaders(){
+    return {
+      'Authorization': 'Bearer ' + token,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28'
+    };
+  }
+
+  async function apiFetch(path, opts){
+    opts = opts || {};
+    opts.headers = Object.assign({}, ghHeaders(), opts.headers || {});
+    const res = await fetch(API + path, opts);
+    let body = null;
+    try { body = await res.json(); } catch(e){ /* no body */ }
+    return { res, body };
+  }
+
+  function b64EncodeUtf8(str){
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+
+  // ---- auth verify ----
+  $('verifyBtn').addEventListener('click', async () => {
+    token = patEl.value.trim();
+    if(!token){ log('paste a token first', 'err'); return; }
+    $('verifyBtn').disabled = true;
+    try{
+      const { res, body } = await apiFetch('/repos/' + OWNER + '/' + REPO);
+      if(res.status === 200){
+        authDot.className = 'status-dot on';
+        authText.textContent = 'verified — access to ' + body.full_name;
+        log('token verified against ' + body.full_name, 'ok');
+        await refreshManifest();
+      } else if(res.status === 401){
+        authDot.className = 'status-dot off';
+        authText.textContent = 'invalid token';
+        log('401 unauthorized — bad or expired token', 'err');
+      } else if(res.status === 403){
+        authDot.className = 'status-dot off';
+        authText.textContent = 'forbidden — check scope/rate limit';
+        log('403 forbidden — token lacks repo scope, or rate limited', 'err');
+      } else if(res.status === 404){
+        authDot.className = 'status-dot off';
+        authText.textContent = 'repo not found or no access';
+        log('404 — repo not visible to this token', 'err');
+      } else {
+        authDot.className = 'status-dot off';
+        authText.textContent = 'error ' + res.status;
+        log('unexpected status ' + res.status + ' verifying token', 'err');
+      }
+    } catch(err){
+      log('network error verifying token: ' + err.message, 'err');
+    } finally {
+      $('verifyBtn').disabled = false;
+    }
+  });
+
+  // ---- file picker ----
+  $('gfile').addEventListener('change', (e) => {
+    const f = e.target.files[0];
+    if(!f) return;
+    $('filenameLabel').textContent = f.name;
+    const reader = new FileReader();
+    reader.onload = () => { $('gcode').value = reader.result; };
+    reader.readAsText(f);
+  });
+
+  // ---- manifest fetch/render ----
+  async function getManifest(){
+    const { res, body } = await apiFetch('/repos/' + OWNER + '/' + REPO + '/contents/games/manifest.json?ref=' + BRANCH);
+    if(res.status === 404){
+      return { sha: null, json: { games: [] } };
+    }
+    if(res.status !== 200){
+      throw new Error('failed to fetch manifest.json (' + res.status + ')');
+    }
+    const content = decodeURIComponent(escape(atob(body.content.replace(/\n/g,''))));
+    let json;
+    try { json = JSON.parse(content); } catch(e){ throw new Error('manifest.json is not valid JSON'); }
+    if(!Array.isArray(json.games)) json.games = [];
+    return { sha: body.sha, json };
+  }
+
+  async function refreshManifest(){
+    if(!token){ log('verify a token first', 'err'); return; }
+    try{
+      const { json } = await getManifest();
+      renderTable(json.games);
+      log('manifest refreshed — ' + json.games.length + ' game(s)', 'ok');
+    } catch(err){
+      log('refresh failed: ' + err.message, 'err');
+      tableWrap.innerHTML = '<div class="empty">could not load manifest</div>';
+    }
+  }
+
+  function renderTable(games){
+    if(!games.length){
+      tableWrap.innerHTML = '<div class="empty">no games registered yet</div>';
+      return;
+    }
+    let rows = games.map(g => `
+      <tr>
+        <td class="icon-cell">${escapeHtml(g.icon || '')}</td>
+        <td class="id-cell">${escapeHtml(g.id)}</td>
+        <td>${escapeHtml(g.name || '')}</td>
+        <td>${escapeHtml(g.file || '')}</td>
+        <td><button class="ghost" data-remove="${escapeHtml(g.id)}">remove</button></td>
+      </tr>
+    `).join('');
+    tableWrap.innerHTML = `
+      <table>
+        <thead><tr><th></th><th>id</th><th>name</th><th>file</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+    tableWrap.querySelectorAll('[data-remove]').forEach(btn => {
+      btn.addEventListener('click', () => removeFromManifest(btn.getAttribute('data-remove')));
+    });
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function removeFromManifest(id){
+    if(!token){ log('verify a token first', 'err'); return; }
+    if(!confirm('Remove "' + id + '" from manifest.json? The game file itself stays in the repo.')) return;
+    try{
+      const { sha, json } = await getManifest();
+      const before = json.games.length;
+      json.games = json.games.filter(g => g.id !== id);
+      if(json.games.length === before){
+        log('id "' + id + '" not found in manifest', 'err');
+        return;
+      }
+      await putManifest(json, sha, 'Remove ' + id + ' from manifest');
+      log('removed "' + id + '" from manifest (file left in games/)', 'ok');
+      await refreshManifest();
+    } catch(err){
+      log('remove failed: ' + err.message, 'err');
+    }
+  }
+
+  async function putManifest(json, sha, message){
+    const body = {
+      message: message,
+      content: b64EncodeUtf8(JSON.stringify(json, null, 2) + '\n'),
+      branch: BRANCH
+    };
+    if(sha) body.sha = sha;
+    const { res, body: respBody } = await apiFetch(
+      '/repos/' + OWNER + '/' + REPO + '/contents/games/manifest.json',
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    );
+    if(res.status !== 200 && res.status !== 201){
+      throw new Error(describeError(res.status, respBody));
+    }
+    return respBody;
+  }
+
+  function describeError(status, body){
+    if(status === 409) return '409 conflict — manifest changed since last fetch, refresh and retry';
+    if(status === 401) return '401 unauthorized — token invalid or expired';
+    if(status === 403){
+      if(body && /rate limit/i.test(body.message || '')) return '403 — rate limited, wait and retry';
+      return '403 forbidden — token missing contents:write scope';
+    }
+    if(status === 422) return '422 — validation failed (' + (body && body.message || 'bad request') + ')';
+    return status + ' — ' + (body && body.message ? body.message : 'unknown error');
+  }
+
+  // ---- add game flow ----
+  $('submitBtn').addEventListener('click', async () => {
+    if(!token){ log('verify a token first', 'err'); return; }
+
+    const id = $('gid').value.trim();
+    const name = $('gname').value.trim();
+    const icon = $('gicon').value.trim();
+    const code = $('gcode').value;
+
+    if(!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(id)){
+      log('invalid id — use lowercase letters, numbers, hyphens only', 'err');
+      return;
+    }
+    if(BUILTIN_IDS.includes(id)){
+      log('id "' + id + '" collides with a built-in game — blocked client-side', 'err');
+      return;
+    }
+    if(!name){ log('display name is required', 'err'); return; }
+    if(!icon){ log('icon is required', 'err'); return; }
+    if(!code.trim()){ log('no module source — choose a file or paste code', 'err'); return; }
+
+    $('submitBtn').disabled = true;
+    const filePath = 'games/' + id + '.js';
+
+    try{
+      // check for existing file to avoid blind overwrite via 409
+      const existing = await apiFetch('/repos/' + OWNER + '/' + REPO + '/contents/' + filePath + '?ref=' + BRANCH);
+      if(existing.res.status === 200){
+        if(!confirm('games/' + id + '.js already exists in the repo. Overwrite?')){
+          log('aborted — file exists, not overwritten', 'info');
+          $('submitBtn').disabled = false;
+          return;
+        }
+      }
+
+      const commitBody = {
+        message: 'Add game module: ' + id,
+        content: b64EncodeUtf8(code),
+        branch: BRANCH
+      };
+      if(existing.res.status === 200) commitBody.sha = existing.body.sha;
+
+      const { res: putRes, body: putBody } = await apiFetch(
+        '/repos/' + OWNER + '/' + REPO + '/contents/' + filePath,
+        { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(commitBody) }
+      );
+
+      if(putRes.status !== 200 && putRes.status !== 201){
+        log('commit failed: ' + describeError(putRes.status, putBody), 'err');
+        $('submitBtn').disabled = false;
+        return;
+      }
+      log('committed games/' + id + '.js', 'ok');
+
+      // now update manifest
+      const { sha: manifestSha, json: manifest } = await getManifest();
+      if(manifest.games.some(g => g.id === id)){
+        log('id already present in manifest — updating entry', 'info');
+        manifest.games = manifest.games.filter(g => g.id !== id);
+      }
+      manifest.games.push({
+        id: id,
+        name: name,
+        icon: icon,
+        color: 'g-' + id,
+        file: filePath
+      });
+
+      await putManifest(manifest, manifestSha, 'Register game: ' + id);
+      log('manifest.json updated — "' + id + '" registered', 'ok');
+
+      await refreshManifest();
+
+      // reset form
+      $('gid').value = ''; $('gname').value = ''; $('gicon').value = '';
+      $('gcode').value = ''; $('filenameLabel').textContent = '';
+      $('gfile').value = '';
+
+    } catch(err){
+      log('unexpected error: ' + err.message, 'err');
+    } finally {
+      $('submitBtn').disabled = false;
+    }
+  });
+
+  $('refreshBtn').addEventListener('click', refreshManifest);
+
+})();
+</script>
+</body>
+</html>
